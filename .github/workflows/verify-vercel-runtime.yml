@@ -1,0 +1,60 @@
+name: Verify BUNBUN Vercel runtime
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: read
+  statuses: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel deployment and test translate API
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Looking for a Vercel deployment for $SHA"
+          URL=""
+          for i in $(seq 1 36); do
+            deps=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=20" || echo '[]')
+            ids=$(echo "$deps" | jq -r '.[].id' 2>/dev/null || true)
+            for id in $ids; do
+              statuses=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=20" || echo '[]')
+              state=$(echo "$statuses" | jq -r '.[0].state // empty')
+              envurl=$(echo "$statuses" | jq -r '.[0].environment_url // empty')
+              if [ "$state" = "success" ] && [ -n "$envurl" ] && [ "$envurl" != "null" ]; then
+                URL="$envurl"
+                break 2
+              fi
+            done
+            sleep 5
+          done
+
+          if [ -z "$URL" ]; then
+            echo "No GitHub deployment environment_url was published for this commit."
+            exit 2
+          fi
+
+          echo "Deployment URL: $URL"
+          echo "Testing $URL/api/translate"
+          body=$(mktemp)
+          code=$(curl -sS -o "$body" -w "%{http_code}" \
+            -X POST "$URL/api/translate" \
+            -H 'Content-Type: application/json' \
+            --data '{"text":"안녕하세요","from":"ko","to":"ja"}')
+          echo "HTTP: $code"
+          cat "$body"
+          echo
+          if [ "$code" != "200" ]; then
+            exit 3
+          fi
+          jq -e '.translation and (.translation|length>0)' "$body" >/dev/null
+          echo "BUNBUN_RUNTIME_OK"
