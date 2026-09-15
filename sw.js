@@ -2,7 +2,7 @@
    - 앱 껍데기(HTML/아이콘/매니페스트)를 캐시해서 비행기 모드에서도 문장집이 열리게 함
    - 번역 API 응답은 캐시하지 않음(항상 최신 결과) */
 
-const CACHE = 'bunbun-v1';
+const CACHE = 'bunbun-v160';
 const SHELL = [
   './',
   './index.html',

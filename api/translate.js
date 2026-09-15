@@ -17,7 +17,7 @@ const MAX_CHARS = 400;
 const PER_IP_HOUR = 60;
 const PER_IP_DAY = 300;
 
-const LANGS = { ko: 'Korean', vi: 'Vietnamese', en: 'English', ja: 'Japanese' };
+const LANGS = { ko: 'Korean', vi: 'Vietnamese', en: 'English', ja: 'Japanese', tl: 'Filipino (Tagalog)' };
 
 /* ---------------------------------------------------------
    사용량 기록
@@ -146,7 +146,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({
       translation,
-      reading: (to === 'vi' || to === 'ja') ? String(parsed.reading || '') : ''
+      reading: (to === 'vi' || to === 'ja' || to === 'tl') ? String(parsed.reading || '') : ''
     });
   } catch (e) {
     console.error('proxy error', e);

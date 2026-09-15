@@ -1,7 +1,7 @@
 {
   "name": "BUNBUN — 여행 통역기",
   "short_name": "BUNBUN",
-  "description": "한국어 ↔ 베트남어 / 영어 / 일본어 음성 통역기. OpenAI 서버 번역, 음성 읽기, 문장집과 번역 기록을 지원합니다.",
+  "description": "한국어 ↔ 베트남어 / 영어 / 일본어 / 필리핀어 5개 언어 여행 통역기. OpenAI 서버 번역, 음성 읽기, 문장집과 번역 기록을 지원합니다.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
