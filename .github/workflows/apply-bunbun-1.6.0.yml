@@ -1,0 +1,118 @@
+name: Apply BUNBUN 1.6.0 web
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[bunbun-1.6.0]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout BUNBUN
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout tested 1.6.0 builder
+        uses: actions/checkout@v4
+        with:
+          repository: kknd1200/AI-English-App
+          ref: build-travel-translator-apk
+          path: builder
+
+      - name: Generate BUNBUN 1.6.0 web
+        shell: bash
+        run: |
+          mkdir -p androidapp/app/src/main/assets
+          cp builder/mobile/index-bunbun-1.5.0.html androidapp/app/src/main/assets/index.html
+          python3 builder/mobile/patch-bunbun-1.6.0.py
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          generated = Path('androidapp/app/src/main/assets/index.html')
+          s = generated.read_text(encoding='utf-8')
+
+          # Keep BUNBUN PWA installability on Vercel.
+          if 'rel="manifest"' not in s:
+              s = s.replace(
+                  '<meta name="theme-color" content="#0b172a">',
+                  '<meta name="theme-color" content="#0b172a">\n'
+                  '<link rel="manifest" href="manifest.json">\n'
+                  '<meta name="apple-mobile-web-app-capable" content="yes">\n'
+                  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
+                  '<meta name="apple-mobile-web-app-title" content="BUNBUN">\n'
+                  '<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">'
+              )
+          if 'serviceWorker.register' not in s:
+              s = s.replace(
+                  '</script>\n</body>',
+                  "if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}\n</script>\n</body>"
+              )
+
+          required = [
+              'BUNBUN 1.6.0',
+              "tl:{name:'Filipino'",
+              "bcp:'fil-PH'",
+              '--dock-h:250px',
+              'scrollBubbleIntoView',
+              '/api/translate'
+          ]
+          for marker in required:
+              if marker not in s:
+                  raise SystemExit('web verification failed: ' + marker)
+
+          Path('index.html').write_text(s, encoding='utf-8')
+
+          # Enable Filipino on the real BUNBUN Vercel OpenAI proxy.
+          api = Path('api/translate.js')
+          a = api.read_text(encoding='utf-8')
+          a = a.replace(
+              "const LANGS = { ko: 'Korean', vi: 'Vietnamese', en: 'English', ja: 'Japanese' };",
+              "const LANGS = { ko: 'Korean', vi: 'Vietnamese', en: 'English', ja: 'Japanese', tl: 'Filipino (Tagalog)' };"
+          )
+          a = a.replace(
+              "reading: (to === 'vi' || to === 'ja') ? String(parsed.reading || '') : ''",
+              "reading: (to === 'vi' || to === 'ja' || to === 'tl') ? String(parsed.reading || '') : ''"
+          )
+          if "tl: 'Filipino (Tagalog)'" not in a:
+              raise SystemExit('Filipino API patch failed')
+          api.write_text(a, encoding='utf-8')
+
+          # Force installed PWA/web users to receive the new shell.
+          sw = Path('sw.js')
+          w = sw.read_text(encoding='utf-8')
+          w = w.replace("const CACHE = 'bunbun-v1';", "const CACHE = 'bunbun-v160';")
+          sw.write_text(w, encoding='utf-8')
+
+          manifest = Path('manifest.json')
+          m = json.loads(manifest.read_text(encoding='utf-8'))
+          m['description'] = '한국어 ↔ 베트남어 / 영어 / 일본어 / 필리핀어 5개 언어 여행 통역기. OpenAI 서버 번역, 음성 읽기, 문장집과 번역 기록을 지원합니다.'
+          manifest.write_text(json.dumps(m, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('index.html','utf8');
+          const a=s.indexOf('<script>'), b=s.lastIndexOf('</script>');
+          fs.writeFileSync('/tmp/bunbun-script.js',s.slice(a+8,b));
+          NODE
+          node --check /tmp/bunbun-script.js
+
+      - name: Commit BUNBUN 1.6.0 to main
+        shell: bash
+        run: |
+          rm -rf androidapp builder
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html api/translate.js sw.js manifest.json
+          git diff --cached --check
+          git commit -m "Release BUNBUN 1.6.0 web with Filipino support"
+          git push origin main
